@@ -2,45 +2,106 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>WebGPU Demo</title>
+    <title>WebGPU Triangle Demo</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            width: 600px;
+            height: 400px;
+        }
+    </style>
 </head>
 <body>
-    <h1>My First WebGPU Demo</h1>
     <canvas id="gpu-canvas" width="600" height="400"></canvas>
 
     <script type="module">
-    async function initWebGPU() {
-      if (!navigator.gpu) {
-        alert("Your browser does not support WebGPU. Try Chrome/Edge Canary with WebGPU enabled!");
-        return;
-      }
+        async function initWebGPU() {
+            if (!navigator.gpu) {
+                alert("Your browser does not support WebGPU. Try Chrome/Edge Canary!");
+                return;
+            }
 
-      const adapter = await navigator.gpu.requestAdapter();
-      const device = await adapter.requestDevice();
+            // 1. initial WebGPU
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
 
-      const canvas = document.getElementById("gpu-canvas");
-      const context = canvas.getContext("webgpu");
+            const canvas = document.getElementById("gpu-canvas");
+            const context = canvas.getContext("webgpu");
 
-      context.configure({
-        device,
-        format: navigator.gpu.getPreferredCanvasFormat(),
-      });
+            const format = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({ device, format });
 
-      const encoder = device.createCommandEncoder();
-      const textureView = context.getCurrentTexture().createView();
-      const renderPass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: textureView,
-          clearValue: { r: 0.2, g: 0.6, b: 0.8, a: 1 },
-          loadOp: 'clear',
-          storeOp: 'store'
-        }]
-      });
-      renderPass.end();
-      device.queue.submit([encoder.finish()]);
-    }
+            // 2. define (WGSL)
+            const shaderCode = `
+            @vertex
+            fn vs_main(@builtin(vertex_index) VertexIndex : u32)
+                 -> @builtin(position) vec4<f32> {
+              var pos = array<vec2<f32>, 3>(
+                vec2<f32>(0.0, 0.5),   // top
+                vec2<f32>(-0.5, -0.5), // left
+                vec2<f32>(0.5, -0.5)   // right
+              );
+              return vec4<f32>(pos[VertexIndex], 0.0, 1.0);
+            }
 
-    initWebGPU();
+            @fragment
+            fn fs_main() -> @location(0) vec4<f32> {
+              return vec4<f32>(1.0, 0.6, 0.2, 1.0); // ³ÈÉ«
+            }
+          `;
+
+            const shaderModule = device.createShaderModule({ code: shaderCode });
+
+            // 3. create render pipeline
+            const pipeline = device.createRenderPipeline({
+                layout: "auto",
+                vertex: {
+                    module: shaderModule,
+                    entryPoint: "vs_main",
+                },
+                fragment: {
+                    module: shaderModule,
+                    entryPoint: "fs_main",
+                    targets: [{ format }],
+                },
+                primitive: {
+                    topology: "triangle-list", // draw triangle
+                },
+            });
+
+            // 4. render triangle
+            function frame() {
+                const encoder = device.createCommandEncoder();
+                const view = context.getCurrentTexture().createView();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view,
+                        clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1 }, // draw deep blue background
+                        loadOp: "clear",
+                        storeOp: "store",
+                    }],
+                });
+
+                pass.setPipeline(pipeline);
+                pass.draw(3, 1, 0, 0); // 3 vertex
+                pass.end();
+
+                device.queue.submit([encoder.finish()]);
+                requestAnimationFrame(frame);
+            }
+
+            frame();
+        }
+
+        initWebGPU();
     </script>
 </body>
 </html>
