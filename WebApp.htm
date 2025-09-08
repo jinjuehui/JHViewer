@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>WebGPU Demo</title>
+</head>
+<body>
+    <h1>My First WebGPU Demo</h1>
+    <canvas id="gpu-canvas" width="600" height="400"></canvas>
+
+    <script type="module">
+    async function initWebGPU() {
+      if (!navigator.gpu) {
+        alert("Your browser does not support WebGPU. Try Chrome/Edge Canary with WebGPU enabled!");
+        return;
+      }
+
+      const adapter = await navigator.gpu.requestAdapter();
+      const device = await adapter.requestDevice();
+
+      const canvas = document.getElementById("gpu-canvas");
+      const context = canvas.getContext("webgpu");
+
+      context.configure({
+        device,
+        format: navigator.gpu.getPreferredCanvasFormat(),
+      });
+
+      const encoder = device.createCommandEncoder();
+      const textureView = context.getCurrentTexture().createView();
+      const renderPass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: textureView,
+          clearValue: { r: 0.2, g: 0.6, b: 0.8, a: 1 },
+          loadOp: 'clear',
+          storeOp: 'store'
+        }]
+      });
+      renderPass.end();
+      device.queue.submit([encoder.finish()]);
+    }
+
+    initWebGPU();
+    </script>
+</body>
+</html>
